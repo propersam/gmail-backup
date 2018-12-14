@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import imaplib
-import os
+import os, sys
 import getpass
 import re
 
@@ -49,8 +49,6 @@ def download_message(svr, n, dirpath, basename):
     resp, lst = svr.fetch(n, '(RFC822)')
     if resp != 'OK':
         raise Exception("Bad response: %s %s" % (resp, lst))
-    if not os.path.exists(dirpath):
-        os.makedirs(dirpath)
     fpath = os.path.join(dirpath, basename)
     f = open(fpath, 'w')
     f.write(lst[0][1])
@@ -104,38 +102,49 @@ def do_backup():
     else:
         print('There is a fatal error somewhere')
 
-    email_folder_name = get_folder_to_backup(options)
+    while True:
+        email_folder_name = get_folder_to_backup(options)
 
-    resp, countstr = svr.select(email_folder_name, True)
-    count = int(countstr[0])
+        resp, countstr = svr.select(email_folder_name, True)
+        count = int(countstr[0])
 
-    dir_path = os.path.join('backup', user, email_folder_name)
-    existing_files = os.listdir(dir_path)
-    lastdownloaded = max(UIDFromFilename(f)
-                         for f in existing_files) if existing_files else 0
+        dir_path = os.path.join('backup', user, email_folder_name)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+        existing_files = os.listdir(dir_path)
+        lastdownloaded = max(UIDFromFilename(f)
+                             for f in existing_files) if existing_files else 0
 
-    # A simple binary search to see where we left off
-    gotten, ungotten = 0, count + 1
-    while (ungotten - gotten) > 1:
-        attempt = (gotten + ungotten) / 2
-        uid = getUIDForMessage(svr, attempt)
-        if int(uid) <= lastdownloaded:
-            print "Finding starting point: %d/%d (UID: %s) too low" % (attempt, count, uid)
-            gotten = attempt
+        # A simple binary search to see where we left off
+        gotten, ungotten = 0, count + 1
+        while (ungotten - gotten) > 1:
+            attempt = (gotten + ungotten) / 2
+            uid = getUIDForMessage(svr, attempt)
+            if int(uid) <= lastdownloaded:
+                print "Finding starting point: %d/%d (UID: %s) too low" % (attempt, count, uid)
+                gotten = attempt
+            else:
+                print "Finding starting point: %d/%d (UID: %s) too high" % (attempt, count, uid)
+                ungotten = attempt
+
+        # The download loop
+        for i in range(ungotten, count + 1):
+            uid = getUIDForMessage(svr, i)
+            basename = uid+'.eml'
+
+            print "Downloading %d/%d (UID: %s)" % (i, count, basename)
+            download_message(svr, i, dir_path, basename)
+
+        another_action = raw_input('Do you want to do another action\nEnter y or anything else: ')
+        if another_action.lower() == 'y':
+            pass
         else:
-            print "Finding starting point: %d/%d (UID: %s) too high" % (attempt, count, uid)
-            ungotten = attempt
+            print('Goodbye...')
+            svr.close()
+            svr.logout()
+            sys.exit()
 
-    # The download loop
-    for i in range(ungotten, count + 1):
-        uid = getUIDForMessage(svr, i)
-        basename = uid+'.eml'
-
-        print "Downloading %d/%d (UID: %s)" % (i, count, basename)
-        download_message(svr, i, dir_path, basename)
-
-    svr.close()
-    svr.logout()
+    
 
 
 if __name__ == "__main__":
