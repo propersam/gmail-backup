@@ -52,7 +52,7 @@ def download_message(svr, n, dirpath, basename):
     if not os.path.exists(dirpath):
         os.makedirs(dirpath)
     fpath = os.path.join(dirpath, basename)
-    f = open(fpath, 'w+')
+    f = open(fpath, 'w')
     f.write(lst[0][1])
     f.close()
 
@@ -109,7 +109,8 @@ def do_backup():
     resp, countstr = svr.select(email_folder_name, True)
     count = int(countstr[0])
 
-    existing_files = os.listdir(".")
+    dir_path = os.path.join('backup', user, email_folder_name)
+    existing_files = os.listdir(dir_path)
     lastdownloaded = max(UIDFromFilename(f)
                          for f in existing_files) if existing_files else 0
 
@@ -130,7 +131,6 @@ def do_backup():
         uid = getUIDForMessage(svr, i)
         basename = uid+'.eml'
 
-        dir_path = os.path.join('backup', user, email_folder_name)
         print "Downloading %d/%d (UID: %s)" % (i, count, basename)
         download_message(svr, i, dir_path, basename)
 
